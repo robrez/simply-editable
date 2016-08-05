@@ -1,0 +1,275 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../iron-a11y-keys/iron-a11y-keys.html">
+
+<!--
+  - Consider undo.js to manage undo and redo (if any platforms lack support)
+-->
+<dom-module id="simply-editable">
+  <template>
+    <style>
+      #content {
+        padding: 16px;
+        margin: 16px;
+        border: 1px solid green;
+      }
+
+      .toolbar {
+        background: lightblue;
+        padding: 2px 8px;
+        @apply(--layout-horizontal);
+        @apply(--layout-center);
+        height: 56px;
+        border: 1px solid green;
+      }
+
+      button {
+        min-width: 40px;
+        min-height: 40px;
+        background: lightgrey;
+      }
+
+      button[data-active] {
+        background: darkgrey;
+      }
+    </style>
+    <div class="toolbar">
+      <button data-active$="[[selectionMetaData.bold]]" on-tap="_onTapBold">b</button>
+      <button data-active$="[[selectionMetaData.italic]]" on-tap="_onTapItalic">i</button>
+      <button data-active$="[[selectionMetaData.underline]]" on-tap="_onTapUnderline">u</button>
+      <button data-active$="[[selectionMetaData.href]]" on-tap="_onTapHref">l</button>
+      <button data-active$="[[selectionMetaData.potentialFormatting]]" on-tap="_onTapClear">clear</button>
+    </div>
+    <div id="content" contenteditable="true" on-change="_onChange">
+    </div>
+    <iron-a11y-keys target="[[target]]" keys="up down left right pageup pagedown home end arrow ctrl+v ctrl+x"
+                on-keys-pressed="_checkForSelection">
+    </iron-a11y-keys>
+  </template>
+  <script>
+    Polymer({
+      is: 'simply-editable',
+
+      properties: {
+        /**
+         * the content editable element
+         */
+        target: {
+          type: Object,
+          value: function() {
+            return this.$.content;
+          }
+        },
+        /**
+         * Meta-data about the current selection
+         */
+        selectionMetaData: {
+          type: Object,
+          value: function() {
+            return {};
+          }
+        },
+        _boundObserver: {
+          type: Object
+        },
+        _mutationDebounce: {
+          type: Number,
+          value: 125
+        },
+        _lastTextMutation: {
+          type: Object
+        }
+      },
+
+      listeners: {
+        'content.up': '_onUp',
+        'content.keyup': '_onKeyup'
+      },
+
+      ready: function() {
+        var handler = this._handleMutation.bind(this);
+        var observer = new MutationObserver(function(mutations) {
+          mutations.forEach(handler);
+        }.bind(this));
+        var config = {
+          attributes: false,
+          childList: true,
+          characterData: true,
+          subtree: true
+        };
+        var target = this.target;
+        observer.observe(target, config);
+        this._boundObserver = observer;
+      },
+
+      detached: function() {
+        if (this._boundObserver && this._boundObserver.disconnect) {
+          this._boundObserver.disconnect();
+          this._boundObserver = null;
+        }
+      },
+
+      _onTapBold: function() {
+        this._execCommand("bold");
+      },
+      _onTapItalic: function() {
+        this._execCommand("italic");
+      },
+      _onTapUnderline: function() {
+        this._execCommand("underline");
+      },
+      _onTapClear: function() {
+        this._execCommand("removeFormat");
+      },
+      _onTapHref: function() {
+        //display dialog for modifying the anchor
+        console.log(this.selectionMetaData);
+      },
+
+      _execCommand: function(cmd, value) {
+        value = value || "";
+        var result = document.execCommand(cmd, false, value);
+        //if(result) { this._forceSelectionUpdate(); }
+      },
+
+      /**
+       * After enter, space, or tab try to determine if last mutation
+       * was a url. Not using iron-a11y-keys because events fire in a sequence
+       * that causes some odd behavior if a url was entered -- the cursor
+       * incorrectly jumps to the beggining of the newly created anchor
+       */
+      _onKeyup: function(e) {
+        if (e.keyCode == 13 || e.keyCode == 32) {
+          this._processUrl();
+        }
+      },
+
+      /**
+       * Update meta-data about current selection
+       */
+      _checkForSelection: function(e) {
+        this._updateSelection();
+      },
+
+      /**
+       * Inspect the last text mutation, if it may be a URL, replace it with
+       * an anchor
+       */
+      _processUrl: function(mutation) {
+        mutation = mutation || this._lastTextMutation;
+        if (!mutation) {
+          return;
+        }
+        if (mutation.target.nodeType !== Node.TEXT_NODE) {
+          return;
+        }
+        var targetText = mutation.target.textContent.trim();
+        var urlRe =
+          /^(?:\w+:)?\/\/([^\s\.]+\.\S{2}|localhost[\:?\d]*)\S*$/;
+        if (urlRe.test(targetText)) {
+          var a = document.createElement("a");
+          a.setAttribute("href", targetText);
+          a.textContent = targetText;
+          mutation.target.parentElement.replaceChild(a, mutation.target);
+          this._lastTextMutation = null;
+        }
+      },
+
+      _onUp: function(e) {
+        this._updateSelection();
+      },
+
+      _forceSelectionUpdate: function() {
+        this._clearPrevSelection();
+        this._updateSelection();
+      },
+
+      _clearPrevSelection: function() {
+        this._prevAnchor = null;
+        this._prevFocus = null;
+      },
+
+      _updateSelection: function() {
+        this.debounce('upsel', this._updateSelectionMetaData, this._mutationDebounce);
+      },
+
+      _handleMutation: function(mutation) {
+        if (mutation.type === 'characterData') {
+          this._lastTextMutation = mutation;
+          this._updateSelection();
+        }
+      },
+
+      /**
+       * Update selection meta-data object
+       * The goal is to land here anytime the carrat moves
+       *  - mutation observer
+       *  - arrow keys
+       *  - touch/mouse events
+       */
+      _updateSelectionMetaData: function() {
+        var sf = window.getSelection || document.getSelection;
+        if (!sf) {
+          return;
+        }
+        var selection = sf();
+        if (!selection) {
+          return;
+        }
+        var anchor = selection.anchorNode;
+        var focus = selection.focusNode;
+        var mutation = this._lastTextMutation;
+        var sameSelection =
+          (this._prevAnchor && this._prevAnchor === anchor &&
+            this._prevFocus && this._prevFocus === focus);
+        var unhandledMutation = mutation && !mutation.handled;
+        if (sameSelection && !unhandledMutation) {
+          //try to avoid recomputing
+          return;
+        }
+
+        if (unhandledMutation) {
+          mutation.handled = true;
+        }
+
+        //determine properties of current selection
+        var states = ["bold", "italic", "underline"];
+        var selectionMeta = {
+          href: null,
+          hrefText: null,
+          hrefElement: null,
+          multiElements: anchor !== focus,
+          bold: false,
+          italic: false,
+          underline: false,
+          potentialFormatting: anchor !== focus
+        };
+        states.forEach(function(state) {
+          if (!selectionMeta[state]) {
+            var r = document.queryCommandState(state);
+            selectionMeta[state] = r;
+          }
+        }.bind(this));
+
+        //check semantics of the selection. eg: anchor? list item? etc
+        var p = anchor;
+        while (p && p !== this.target) {
+          if (!selectionMeta.href && p.href) {
+            selectionMeta.href = p.href;
+            selectionMeta.hrefText = p.textContent;
+            selectionMeta.hrefElement = p;
+            selectionMeta.underline = false; //don't flag as underline
+          }
+          p = p.parentElement;
+        }
+
+        selectionMeta.potentialFormatting = selectionMeta.bold || selectionMeta.underline || selectionMeta.italic;
+
+        this._prevAnchor = anchor;
+        this._prevFocus = focus;
+        this.selectionMetaData = selectionMeta;
+      }
+
+    });
+  </script>
+</dom-module>
