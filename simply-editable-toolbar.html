@@ -1,0 +1,73 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
+
+<!--
+  `<simply-editable-toolbar>` is a toolbar for controlling
+  and interacting with a `<simply-editable>` editor
+-->
+<dom-module id="simply-editable-toolbar">
+  <template>
+    <style>
+      .toolbar {
+        background: lightblue;
+        padding: 2px 8px;
+        @apply(--layout-horizontal);
+        @apply(--layout-center);
+        height: 56px;
+        border: 1px solid green;
+      }
+
+      button {
+        min-width: 40px;
+        min-height: 40px;
+        background: lightgrey;
+      }
+
+      button[data-active] {
+        background: darkgrey;
+      }
+    </style>
+    <div class="toolbar">
+      <button data-active$="[[selectionMetaData.bold]]" on-tap="_onTapBold">b</button>
+      <button data-active$="[[selectionMetaData.italic]]" on-tap="_onTapItalic">i</button>
+      <button data-active$="[[selectionMetaData.underline]]" on-tap="_onTapUnderline">u</button>
+      <button data-active$="[[selectionMetaData.href]]" on-tap="_onTapHref">l</button>
+      <button data-active$="[[selectionMetaData.potentialFormatting]]" on-tap="_onTapClear">clear</button>
+    </div>
+  </template>
+  <script>
+    Polymer({
+      is: 'simply-editable-toolbar',
+
+      properties: {
+        /**
+         * Meta-data about the current selection
+         */
+        selectionMetaData: {
+          type: Object
+        }
+      },
+
+      _onTapBold: function() {
+        this.fire('tap-bold', true);
+      },
+
+      _onTapItalic: function() {
+        this.fire('tap-italic', true);
+      },
+
+      _onTapUnderline: function() {
+        this.fire('tap-underline', true);
+      },
+
+      _onTapClear: function() {
+        this.fire('tap-clear-formatting', true);
+      },
+
+      _onTapHref: function() {
+        this.fire('tap-modify-anchor', true);
+      }
+
+    });
+  </script>
+</dom-module>
