@@ -57,11 +57,11 @@
         _boundObserver: {
           type: Object
         },
-        _debounceSanitization: {
+        _debounceSanitizationDuration: {
           type: Number,
           value: 500
         },
-        _debounceMetaComputation: {
+        _debounceMetaComputationDuration: {
           type: Number,
           value: 125
         },
@@ -77,6 +77,7 @@
         'content.up': '_onUp',
         'content.blur': '_blurHandler'
       },
+
 
       /**
        * Begin a mutation observer on the content editable
@@ -130,7 +131,9 @@
       },
 
       modifyAnchor: function() {
-        console.log(this.selectionMetaData);
+        if (this.selectionMetaData.href) {
+          console.log(this.selectionMetaData.href);
+        }
       },
 
       /**
@@ -159,7 +162,7 @@
        * Debounces requests for sanitization
        */
       _debounceSanitization: function() {
-        this.debounce('anchors', this._generateAnchors, this._debounceSanitization);
+        this.debounce('sanitization', this._performSanitization, this._debounceSanitizationDuration);
       },
 
       /**
@@ -172,23 +175,36 @@
       /**
        * Replaces text nodes with anchor nodes when appropriate
        */
-      _generateAnchors: function(parent) {
+      _performSanitization: function(parent) {
         var sel = this._getSelection();
         parent = parent || this.target;
         var target;
-        var walk = document.createTreeWalker(parent, NodeFilter.SHOW_TEXT, null, false);
+        var walk = document.createTreeWalker(parent, NodeFilter.SHOW_TEXT,
+          null, false);
         var changes = 0;
         var lastAppended;
-        while(target = walk.nextNode()) {
-          var nodes = this._replaceTextWithAnchor(target);
-          if (nodes && nodes.length && nodes[0] != target) {
-            var docfrag = document.createDocumentFragment();
-            nodes.forEach(function(n) {
-              docfrag.appendChild(n);
-            }.bind(this));
-            target.parentNode.replaceChild(docfrag, target);
-            changes++;
-            lastAppended = nodes[nodes.length - 1];
+        var targetElement;
+        while (target = walk.nextNode()) {
+          targetElement;
+          if (target.nodeType === Node.TEXT_NODE) {
+            targetElement = target.parentNode;
+          } else {
+            targetElement = target;
+          }
+          if (targetElement.hasAttribute && targetElement.hasAttribute(
+              "data-dirty")) {
+            var nodes = this._replaceTextWithAnchor(target);
+            if (nodes && nodes.length && nodes[0] != target) {
+              var docfrag = document.createDocumentFragment();
+              nodes.forEach(function(n) {
+                docfrag.appendChild(n);
+              }.bind(this));
+              target.parentNode.replaceChild(docfrag, target);
+              changes++;
+              lastAppended = nodes[nodes.length - 1];
+            }
+          } else {
+            //console.log("not dirty, skipping", targetElement);
           }
         }
 
@@ -204,6 +220,11 @@
           sel.removeAllRanges();
           sel.addRange(r);
         }
+        var dirty = parent.querySelectorAll("[data-dirty]");
+        for (var i = 0; i < dirty.length; i++) {
+          dirty[i].removeAttribute("data-dirty");
+        }
+        parent.removeAttribute("data-dirty");
       },
 
       /**
@@ -214,15 +235,18 @@
         var nodes = [];
         var currentText = "";
         var isTextNode = target && target.nodeType === Node.TEXT_NODE;
-        var isAnchorText = target && target.parentElement && target.parentElement.href;
+        var isAnchorText = target && target.parentElement && target.parentElement
+          .href;
         if (isTextNode && !isAnchorText) {
           var tokens = target.textContent.split(/(\S+)/);
-          var urlRe = /^(?:\w+:)?\/\/([^\s\.]+\.\S{2}|localhost[\:?\d]*)\S*$/;
-          for(var i = 0; i < tokens.length; i++) {
+          var urlRe =
+            /^(?:\w+:)?\/\/([^\s\.]+\.\S{2}|localhost[\:?\d]*)\S*$/;
+          for (var i = 0; i < tokens.length; i++) {
             var t = tokens[i];
             if (t.length > 6 && urlRe.test(tokens[i])) {
               if (currentText !== "") {
-                nodes.push(document.createTextNode(currentText.replace(/\s/g, '\u00A0')));
+                nodes.push(document.createTextNode(currentText.replace(
+                  /\s/g, '\u00A0')));
               }
               currentText = "";
               var a = document.createElement("a");
@@ -235,7 +259,8 @@
           }
         }
         if (nodes.length > 0 && currentText !== "") {
-          nodes.push(document.createTextNode(currentText.replace(/\s/g, '\u00A0')));
+          nodes.push(document.createTextNode(currentText.replace(/\s/g,
+            '\u00A0')));
         } else if (nodes.length === 0 && target) {
           nodes.push(target); //return the original input
         }
@@ -255,6 +280,35 @@
       _mutationHandler: function(mutation) {
         var hasContent = this.target.children.length > 0 || this.target.hasChildNodes();
         this._setHasContent(hasContent);
+
+        if (this.isDebouncerActive('sanitization')) {
+          this._debounceSanitization();
+        }
+
+        var addStyleScope = function(node) {
+          if (node.classList && node.classList.add) {
+            node.classList.add("style-scope", "simply-editable-content");
+          }
+        }.bind(this);
+
+        if (mutation.addedNodes && mutation.addedNodes.length) {
+          // too heavy for a mutation observer??
+          mutation.addedNodes.forEach(addStyleScope);
+        }
+
+        // try to flag mutated nodes as unsanitized so that sanitization routine does less work
+        var mutationElement;
+        var targetElement;
+        if (mutation.target.nodeType === Node.TEXT_NODE) {
+          targetElement = mutation.target.parentNode;
+        } else {
+          targetElement = mutation.target;
+        }
+        if (targetElement && targetElement.setAttribute) {
+          targetElement.setAttribute("data-dirty", "true");
+          addStyleScope(targetElement);
+        }
+
         this._debounceSelectionMetaUpdate();
       },
 
@@ -262,7 +316,7 @@
        * Debounces requests to update selection meta-data
        */
       _debounceSelectionMetaUpdate: function() {
-        this.debounce('upsel', this._updateSelectionMetaData, this._debounceMetaComputation);
+        this.debounce('upsel', this._updateSelectionMetaData, this._debounceMetaComputationDuration);
       },
 
       /**
@@ -324,7 +378,8 @@
           p = p.parentElement;
         }
 
-        selectionMeta.potentialFormatting = selectionMeta.bold || selectionMeta.underline || selectionMeta.italic;
+        selectionMeta.potentialFormatting = selectionMeta.bold ||
+          selectionMeta.underline || selectionMeta.italic;
 
         this._setSelectionMetaData(selectionMeta);
       },
