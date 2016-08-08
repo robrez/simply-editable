@@ -23,7 +23,8 @@
 
     <simply-editable-toolbar selection-meta-data="[[selectionMetaData]]" on-tap-bold="_onTapBold"
                 on-tap-italic="_onTapItalic" on-tap-underline="_onTapUnderline" on-tap-clear-formatting="_onTapClear"
-                on-tap-modify-anchor="_onTapHref">
+                on-tap-modify-anchor="_onTapHref" on-tap-ordered-list="_onTapOrderedList" on-tap-unordered-list="_onTapUnorderedList"
+                on-tap-font-size-up="_onTapFontSizeUp" on-tap-font-size-down="_onTapFontSizeDown">
     </simply-editable-toolbar>
 
     <simply-editable-content id="content" selection-meta-data="{{selectionMetaData}}"
@@ -65,6 +66,22 @@
 
       _onTapHref: function() {
         this.$.content.modifyAnchor();
+      },
+
+      _onTapOrderedList: function() {
+        this.$.content.toggleOrderedList();
+      },
+
+      _onTapUnorderedList: function() {
+        this.$.content.toggleUnorderedList();
+      },
+
+      _onTapFontSizeUp: function() {
+        this.$.content.increaseFontSize();
+      },
+
+      _onTapFontSizeDown: function() {
+        this.$.content.decreaseFontSize();
       },
 
       getContent: function() {

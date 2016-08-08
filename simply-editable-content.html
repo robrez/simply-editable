@@ -1,6 +1,10 @@
 <link rel="import" href="../polymer/polymer.html">
 <link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
 <link rel="import" href="../iron-a11y-keys/iron-a11y-keys.html">
+<link rel="import" href="../paper-input/paper-input.html">
+<link rel="import" href="../paper-button/paper-button.html">
+<link rel="import" href="../paper-dialog-behavior/paper-dialog-behavior.html">
+<link rel="import" href="../paper-dialog-behavior/demo/simple-dialog.html">
 
 <!--
   `<simplye-editable-content>` is a simple contenteditable wrapper
@@ -17,17 +21,26 @@
     <style>
       #content {
         padding: 16px;
-        margin: 16px;
-        border: 1px solid green;
       }
     </style>
     <div id="content" contenteditable="true"></div>
     <iron-a11y-keys target="[[target]]" keys="enter:keyup space:keyup tab ctrl+v:keyup"
                 on-keys-pressed="_sanitizationHandler">
     </iron-a11y-keys>
-    <iron-a11y-keys target="[[target]]" keys="up down left right pageup pagedown home end arrow ctrl+v ctrl+x"
+    <iron-a11y-keys target="[[target]]" keys="up:keyup down:keyup left:keyup right:keyup pageup:keyup pagedown:keyup home end arrow:keyup ctrl+v ctrl+x"
                 on-keys-pressed="_selectionHandler">
     </iron-a11y-keys>
+    <simple-dialog id="linkDialog" modal role="alertdialog">
+      <h2>Edit Link</h2>
+      <div>
+        <paper-input label="Text to display" value="{{_tempLink.text}}"></paper-input>
+        <paper-input label="Link to" value="{{_tempLink.href}}"></paper-input>
+      </div>
+      <div class="buttons">
+        <paper-button dialog-dismiss>Cancel</paper-button>
+        <paper-button dialog-confirm autofocus on-tap="_onTapLinkOk">OK</paper-button>
+      </div>
+    </simple-dialog>
   </template>
   <script>
     Polymer({
@@ -78,7 +91,6 @@
         'content.blur': '_blurHandler'
       },
 
-
       /**
        * Begin a mutation observer on the content editable
        * The mutation observer is currently relied upon in order
@@ -119,6 +131,14 @@
         return this._execCommand("underline");
       },
 
+      toggleOrderedList: function() {
+        return this._execCommand("insertOrderedList");
+      },
+
+      toggleUnorderedList: function() {
+        return this._execCommand("insertUnorderedList");
+      },
+
       /**
        * Clear formatting in the current selection
        * TODO consider looping through selected nodes and removing any
@@ -131,8 +151,90 @@
       },
 
       modifyAnchor: function() {
-        if (this.selectionMetaData.href) {
-          console.log(this.selectionMetaData.href);
+        var link = this.selectionMetaData.href;
+        var temp;
+        var sel = this._getSelection();
+        if(link) {
+          temp = {
+            href: link.href,
+            text: link.text,
+            element: link.element
+          };
+        } else {
+          temp = {
+            href: null,
+            text: null,
+            element: null
+          };
+          if (sel) {
+            temp.text = sel.toString();
+          }
+        }
+        var range;
+        if (sel && sel.rangeCount) {
+          range = sel.getRangeAt(0);
+        }
+        temp.range = range;
+        this._tempLink = temp;
+        this.$.linkDialog.toggle();
+      },
+
+      _onTapLinkOk: function() {
+        var link = this._tempLink;
+        if (link.element) {
+          link.element.setAttribute("href", link.href);
+          link.element.textContent = link.text;
+        } else {
+          var sel = this._getSelection();
+          var f = function() {
+            this.target.focus();
+            if(sel && link.range) {
+              sel.removeAllRanges();
+              sel.addRange(link.range);
+            }
+            var res = this._execCommand("createLink", link.href);
+            this._updateSelectionMetaData();
+            if (this.selectionMetaData.href && this.selectionMetaData.href.element) {
+              this.selectionMetaData.href.element.textContent = link.text;
+            }
+          }.bind(this);
+          this.async(f, 25);
+        }
+      },
+
+      _getFontInfo: function(fontInfo) {
+        fontInfo = fontInfo || this.selectionMetaData.font;
+        var size = parseInt(fontInfo.size);
+        if (isNaN(size)) {
+          size = 3;
+        }
+        var font = {
+          size: size,
+          min: size <= 1,
+          max: size >= 7
+        }
+        return font;
+      },
+
+      increaseFontSize: function() {
+        var font = this._getFontInfo();
+        if (!font.max) {
+          font.size = font.size + 1;
+          var res = this._execCommand("fontSize", font.size);
+          if (res) {
+            this._updateSelectionMetaData();
+          }
+        }
+      },
+
+      decreaseFontSize: function() {
+        var font = this._getFontInfo();
+        if (!font.min) {
+          font.size = font.size - 1;
+          var res = this._execCommand("fontSize", font.size);
+          if (res) {
+            this._updateSelectionMetaData();
+          }
         }
       },
 
@@ -210,11 +312,11 @@
 
         if (changes > 0) {
           //reset cursor position
-          var r = document.createRange();
           var focus = sel.focusNode;
           if (sel.focusNode === this.target) {
             focus = lastAppended;
           }
+          var r = document.createRange();
           r.setStartAfter(focus);
           r.collapse(false);
           sel.removeAllRanges();
@@ -340,7 +442,20 @@
        */
       _updateSelectionMetaData: function() {
         var selection = this._getSelection();
+        var selectionMeta = {
+          hasContent: true,
+          href: null,
+          multiElements: anchor !== focus,
+          bold: false,
+          italic: false,
+          underline: false,
+          potentialFormatting: anchor !== focus,
+          orderedList: false,
+          unorderedList: false,
+          font: null
+        };
         if (!selection) {
+          this._setSelectionMetaData(selectionMeta);
           return;
         }
         var anchor = selection.anchorNode;
@@ -348,17 +463,7 @@
 
         //determine properties of current selection
         var states = ["bold", "italic", "underline"];
-        var selectionMeta = {
-          hasContent: true,
-          href: null,
-          hrefText: null,
-          hrefElement: null,
-          multiElements: anchor !== focus,
-          bold: false,
-          italic: false,
-          underline: false,
-          potentialFormatting: anchor !== focus
-        };
+ 
         states.forEach(function(state) {
           if (!selectionMeta[state]) {
             var r = document.queryCommandState(state);
@@ -367,16 +472,41 @@
         }.bind(this));
 
         //check semantics of the selection. eg: anchor? list item? etc
-        var p = anchor;
+        var p = focus || anchor;
+        if (!p && selection.rangeCount > 0) {
+          p = selection.getRangeAt(0).commonAncestorContainer;
+        }
+        var pTag;
+        var font = {
+          size: NaN
+        };
         while (p && p !== this.target) {
+          pTag = p.tagName;
           if (!selectionMeta.href && p.href) {
-            selectionMeta.href = p.href;
-            selectionMeta.hrefText = p.textContent;
-            selectionMeta.hrefElement = p;
+            selectionMeta.href = {
+              href: p.href,
+              text: p.textContent,
+              element: p
+            };
             selectionMeta.underline = false; //don't flag as underline
           }
-          p = p.parentElement;
+          if (!selectionMeta.orderedList && pTag === 'OL') {
+            selectionMeta.orderedList = true;
+          }
+          if (!selectionMeta.unorderedList && pTag === 'UL') {
+            selectionMeta.unorderedList = true;
+          }
+          if (isNaN(font.size) && pTag === 'FONT') {
+            font.size = parseInt(p.getAttribute("size"));
+          }
+          p = p.parentNode;
         }
+
+        if (isNaN(font.size)) {
+          font.size = 3;
+        }
+        font = this._getFontInfo(font);
+        selectionMeta.font = font;
 
         selectionMeta.potentialFormatting = selectionMeta.bold ||
           selectionMeta.underline || selectionMeta.italic;
