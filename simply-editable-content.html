@@ -7,14 +7,16 @@
 <link rel="import" href="../paper-dialog-behavior/demo/simple-dialog.html">
 
 <!--
-  `<simplye-editable-content>` is a simple contenteditable wrapper
-  inteded on lending itself to a basic WYSIWYG editor
+`<simplye-editable-content>` is a simple contenteditable wrapper
+inteded on lending itself to a basic WYSIWYG editor
 
-  It is currently naive in many regards, perhaps relying too heavily
-  on native browser support. It has only been tested in chrome
+It is currently naive in many regards, perhaps relying too heavily
+on native browser support. It has only been tested in chrome
 
-  For example,
+For example,
   - Consider undo.js to manage undo and redo (if any platforms lack support)
+
+@demo demo/index.html
 -->
 <dom-module id="simply-editable-content">
   <template>
@@ -463,7 +465,7 @@
 
         //determine properties of current selection
         var states = ["bold", "italic", "underline"];
- 
+
         states.forEach(function(state) {
           if (!selectionMeta[state]) {
             var r = document.queryCommandState(state);
