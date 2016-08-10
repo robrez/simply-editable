@@ -4,14 +4,16 @@
 <link rel="import" href="simply-editable-toolbar.html">
 
 <!--
-  `<simply-editable>` is a simple contenteditable wrapper
-  inteded on lending itself to a basic WYSIWYG editor
+`<simply-editable>` is a simple contenteditable wrapper
+inteded on lending itself to a basic WYSIWYG editor
 
-  It is currently naive in many regards, perhaps relying too heavily
-  on native browser support. It has only been tested in chrome
+It is currently naive in many regards, perhaps relying too heavily
+on native browser support. It has only been tested in chrome
 
-  For example,
-  - Consider undo.js to manage undo and redo (if any platforms lack support)
+For example,
+- Consider undo.js to manage undo and redo (if any platforms lack support)
+
+@demo demo/index.html
 -->
 <dom-module id="simply-editable">
   <template>
@@ -28,7 +30,7 @@
     </simply-editable-toolbar>
 
     <simply-editable-content id="content" selection-meta-data="{{selectionMetaData}}"
-                has-content="{{hasContent}}">
+                placeholder="{{placeholder}}" has-content="{{hasContent}}">
     </simply-editable-content>
 
   </template>
@@ -41,10 +43,15 @@
          * Meta-data about the current selection
          */
         selectionMetaData: {
-          type: Object
+          type: Object,
+          notify: true
         },
         hasContent: {
-          type: Boolean
+          type: Boolean,
+          notify: true
+        },
+        placeholder: {
+          type: String
         }
       },
 
@@ -86,6 +93,10 @@
 
       getContent: function() {
         return this.$.content.getContent();
+      },
+
+      clearContent: function() {
+        this.$.content.clearContent();
       }
     });
   </script>
