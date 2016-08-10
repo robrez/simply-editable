@@ -1,0 +1,103 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="simply-editable-content.html">
+<link rel="import" href="simply-editable-toolbar.html">
+
+<!--
+`<simply-editable>` is a simple contenteditable wrapper
+inteded on lending itself to a basic WYSIWYG editor
+
+It is currently naive in many regards, perhaps relying too heavily
+on native browser support. It has only been tested in chrome
+
+For example,
+- Consider undo.js to manage undo and redo (if any platforms lack support)
+
+@demo demo/index.html
+-->
+<dom-module id="simply-editable">
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+    </style>
+
+    <simply-editable-toolbar selection-meta-data="[[selectionMetaData]]" on-tap-bold="_onTapBold"
+                on-tap-italic="_onTapItalic" on-tap-underline="_onTapUnderline" on-tap-clear-formatting="_onTapClear"
+                on-tap-modify-anchor="_onTapHref" on-tap-ordered-list="_onTapOrderedList" on-tap-unordered-list="_onTapUnorderedList"
+                on-tap-font-size-up="_onTapFontSizeUp" on-tap-font-size-down="_onTapFontSizeDown">
+    </simply-editable-toolbar>
+
+    <simply-editable-content id="content" selection-meta-data="{{selectionMetaData}}"
+                placeholder="{{placeholder}}" has-content="{{hasContent}}">
+    </simply-editable-content>
+
+  </template>
+  <script>
+    Polymer({
+      is: 'simply-editable',
+
+      properties: {
+        /**
+         * Meta-data about the current selection
+         */
+        selectionMetaData: {
+          type: Object,
+          notify: true
+        },
+        hasContent: {
+          type: Boolean,
+          notify: true
+        },
+        placeholder: {
+          type: String
+        }
+      },
+
+      _onTapBold: function() {
+        return this.$.content.toggleBold();
+      },
+
+      _onTapItalic: function() {
+        return this.$.content.toggleItalic();
+      },
+
+      _onTapUnderline: function() {
+        return this.$.content.toggleUnderline();
+      },
+
+      _onTapClear: function() {
+        return this.$.content.clearFormatting();
+      },
+
+      _onTapHref: function() {
+        this.$.content.modifyAnchor();
+      },
+
+      _onTapOrderedList: function() {
+        this.$.content.toggleOrderedList();
+      },
+
+      _onTapUnorderedList: function() {
+        this.$.content.toggleUnorderedList();
+      },
+
+      _onTapFontSizeUp: function() {
+        this.$.content.increaseFontSize();
+      },
+
+      _onTapFontSizeDown: function() {
+        this.$.content.decreaseFontSize();
+      },
+
+      getContent: function() {
+        return this.$.content.getContent();
+      },
+
+      clearContent: function() {
+        this.$.content.clearContent();
+      }
+    });
+  </script>
+</dom-module>

@@ -1,0 +1,147 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../iron-icon/iron-icon.html">
+<link rel="import" href="../paper-styles/shadow.html">
+<link rel="import" href="simply-editable-icons.html">
+
+<!--
+  `<simply-editable-toolbar>` is a toolbar for controlling
+  and interacting with a `<simply-editable>` editor
+-->
+<dom-module id="simply-editable-toolbar">
+  <template>
+    <style>
+      .toolbar {
+        padding: 2px 8px;
+        @apply(--layout-horizontal);
+        @apply(--layout-center);
+        @apply(--layout-wrap);
+      }
+
+      .button {
+        border: 0;
+        background: inherit;
+        padding: 0;
+        color: #737373;
+        @apply(--shadow-transition);
+        margin-right: 4px;
+        outline: 0;
+        padding: 4px;
+        border-radius: 2px;
+      }
+
+      .button[data-active] {
+        background: #efefef;
+      }
+      .button[disabled] {
+        color: #9b9b9b;
+        pointer-events: none;
+        cursor: auto;
+      }
+      .button:not([disabled]):focus {
+        color: #212121;
+        @apply(--shadow-elevation-2dp);
+      }
+      .button:not([disabled]):hover {
+        color: #212121;
+      }
+      .button:not([disabled]):active {
+        color: black;
+        background-color: darkgrey;
+      }
+
+    </style>
+    <div class="toolbar">
+
+      <!-- would like to use paper-icon-button but it has some a11y issues -->
+
+      <button class="button" data-active$="[[selectionMetaData.bold]]" on-tap="_onTapBold" aria-label="Bold" title="Bold">
+        <iron-icon icon="simply-editable:format-bold"></iron-icon>
+      </button>
+
+      <button class="button" data-active$="[[selectionMetaData.italic]]" on-tap="_onTapItalic" aria-label="Italic" title="Italic">
+        <iron-icon icon="simply-editable:format-italic"></iron-icon>
+      </button>
+
+      <button class="button" data-active$="[[selectionMetaData.underline]]" on-tap="_onTapUnderline" aria-label="Underline" title="Underline">
+        <iron-icon icon="simply-editable:format-underlined"></iron-icon>
+      </button>
+
+      <button class="button" data-active$="[[selectionMetaData.href]]" on-tap="_onTapHref" aria-label="Modify link" title="Modify link">
+        <iron-icon icon="simply-editable:insert-link"></iron-icon>
+      </button>
+
+      <button class="button" data-active$="[[selectionMetaData.unorderedList]]" on-tap="_onTapUnorderedList" aria-label="Unordered list" title="Unordered list">
+        <iron-icon icon="simply-editable:format-list-bulleted"></iron-icon>
+      </button>
+
+      <button class="button" data-active$="[[selectionMetaData.orderedList]]" on-tap="_onTapOrderedList" aria-label="Ordered list" title="Ordered list">
+        <iron-icon icon="simply-editable:format-list-numbered"></iron-icon>
+      </button>
+
+      <button disabled$="[[selectionMetaData.font.min]]" class="button" on-tap="_onTapFontDown" aria-label="Decrease font-size" title="Decrease font-size">
+        <iron-icon icon="simply-editable:text-fields"></iron-icon>
+      </button>
+
+      <button disabled$="[[selectionMetaData.font.max]]" class="button" on-tap="_onTapFontUp" aria-label="Increase font-size" title="Increase font-size">
+        <iron-icon icon="simply-editable:format-size"></iron-icon>
+      </button>
+
+      <button class="button" on-tap="_onTapClear" aria-label="Remove formatting" title="Remove formatting">
+        <iron-icon icon="simply-editable:format-clear"></iron-icon>
+      </button>
+
+    </div>
+  </template>
+  <script>
+    Polymer({
+      is: 'simply-editable-toolbar',
+
+      properties: {
+        /**
+         * Meta-data about the current selection
+         */
+        selectionMetaData: {
+          type: Object
+        }
+      },
+
+      _onTapBold: function() {
+        this.fire('tap-bold', true);
+      },
+
+      _onTapItalic: function() {
+        this.fire('tap-italic', true);
+      },
+
+      _onTapUnderline: function() {
+        this.fire('tap-underline', true);
+      },
+
+      _onTapClear: function() {
+        this.fire('tap-clear-formatting', true);
+      },
+
+      _onTapHref: function() {
+        this.fire('tap-modify-anchor', true);
+      },
+
+      _onTapOrderedList: function() {
+        this.fire('tap-ordered-list', true);
+      },
+
+      _onTapUnorderedList: function() {
+        this.fire('tap-unordered-list', true);
+      },
+
+      _onTapFontUp: function() {
+        this.fire('tap-font-size-up', true);
+      },
+
+      _onTapFontDown: function() {
+        this.fire('tap-font-size-down', true);
+      }
+
+    });
+  </script>
+</dom-module>

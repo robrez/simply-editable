@@ -1,0 +1,543 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../iron-a11y-keys/iron-a11y-keys.html">
+<link rel="import" href="../paper-input/paper-input.html">
+<link rel="import" href="../paper-button/paper-button.html">
+<link rel="import" href="../paper-dialog-behavior/paper-dialog-behavior.html">
+<link rel="import" href="../paper-dialog-behavior/demo/simple-dialog.html">
+
+<!--
+`<simplye-editable-content>` is a simple contenteditable wrapper
+inteded on lending itself to a basic WYSIWYG editor
+
+It is currently naive in many regards, perhaps relying too heavily
+on native browser support. It has only been tested in chrome
+
+For example,
+  - Consider undo.js to manage undo and redo (if any platforms lack support)
+
+@demo demo/index.html
+-->
+<dom-module id="simply-editable-content">
+  <template>
+    <style>
+      #content {
+        padding: 16px;
+      }
+
+      [contenteditable=true]:empty:before {
+        color: var(--secondary-text-color, #737373);
+        content: attr(placeholder);
+        display: block;
+      }
+    </style>
+    <div id="content" contenteditable="true" placeholder$="[[placeholder]]"></div>
+    <iron-a11y-keys target="[[target]]" keys="enter:keyup space:keyup tab ctrl+v:keyup"
+                on-keys-pressed="_sanitizationHandler">
+    </iron-a11y-keys>
+    <iron-a11y-keys target="[[target]]" keys="up:keyup down:keyup left:keyup right:keyup pageup:keyup pagedown:keyup home end arrow:keyup ctrl+v ctrl+x"
+                on-keys-pressed="_selectionHandler">
+    </iron-a11y-keys>
+    <simple-dialog id="linkDialog" modal role="alertdialog">
+      <h2>Edit Link</h2>
+      <div>
+        <paper-input label="Text to display" value="{{_tempLink.text}}"></paper-input>
+        <paper-input label="Link to" value="{{_tempLink.href}}"></paper-input>
+      </div>
+      <div class="buttons">
+        <paper-button dialog-dismiss>Cancel</paper-button>
+        <paper-button dialog-confirm autofocus on-tap="_onTapLinkOk">OK</paper-button>
+      </div>
+    </simple-dialog>
+  </template>
+  <script>
+    Polymer({
+      is: 'simply-editable-content',
+
+      properties: {
+        /**
+         * the content editable element
+         */
+        target: {
+          type: Object,
+          value: function() {
+            return this.$.content;
+          }
+        },
+        /**
+         * Placeholder text
+         */
+        placeholder: {
+          type: String,
+          value: "Enter content"
+        },
+        /**
+         * Meta-data about the current selection
+         */
+        selectionMetaData: {
+          type: Object,
+          value: function() {
+            return {};
+          },
+          notify: true,
+          readOnly: true
+        },
+        _boundObserver: {
+          type: Object
+        },
+        _debounceSanitizationDuration: {
+          type: Number,
+          value: 500
+        },
+        _debounceMetaComputationDuration: {
+          type: Number,
+          value: 125
+        },
+        hasContent: {
+          type: Boolean,
+          value: false,
+          notify: true,
+          readOnly: true
+        }
+      },
+
+      listeners: {
+        'content.up': '_onUp',
+        'content.blur': '_blurHandler'
+      },
+
+      /**
+       * Begin a mutation observer on the content editable
+       * The mutation observer is currently relied upon in order
+       * to auto-generate anchors for any URL detected
+       */
+      ready: function() {
+        var handler = this._mutationHandler.bind(this);
+        var observer = new MutationObserver(function(mutations) {
+          mutations.forEach(handler);
+        }.bind(this));
+        var config = {
+          attributes: false,
+          childList: true,
+          characterData: true,
+          subtree: true
+        };
+        var target = this.target;
+        observer.observe(target, config);
+        this._boundObserver = observer;
+      },
+
+      detached: function() {
+        if (this._boundObserver && this._boundObserver.disconnect) {
+          this._boundObserver.disconnect();
+          this._boundObserver = null;
+        }
+      },
+
+      toggleBold: function() {
+        return this._execCommand("bold");
+      },
+
+      toggleItalic: function() {
+        return this._execCommand("italic");
+      },
+
+      toggleUnderline: function() {
+        return this._execCommand("underline");
+      },
+
+      toggleOrderedList: function() {
+        return this._execCommand("insertOrderedList");
+      },
+
+      toggleUnorderedList: function() {
+        return this._execCommand("insertUnorderedList");
+      },
+
+      /**
+       * Clear formatting in the current selection
+       * TODO consider looping through selected nodes and removing any
+       * style attributes - incase of pasted elements?
+       * Should anchors become text?
+       * Should everything become text?
+       */
+      clearFormatting: function() {
+        return this._execCommand("removeFormat");
+      },
+
+      modifyAnchor: function() {
+        var link = this.selectionMetaData.href;
+        var temp;
+        var sel = this._getSelection();
+        if (link) {
+          temp = {
+            href: link.href,
+            text: link.text,
+            element: link.element
+          };
+        } else {
+          temp = {
+            href: null,
+            text: null,
+            element: null
+          };
+          if (sel) {
+            temp.text = sel.toString();
+          }
+        }
+        var range;
+        if (sel && sel.rangeCount) {
+          range = sel.getRangeAt(0);
+        }
+        temp.range = range;
+        this._tempLink = temp;
+        this.$.linkDialog.toggle();
+      },
+
+      _onTapLinkOk: function() {
+        var link = this._tempLink;
+        if (link.element) {
+          link.element.setAttribute("href", link.href);
+          link.element.textContent = link.text;
+        } else {
+          var sel = this._getSelection();
+          var f = function() {
+            this.target.focus();
+            if (sel && link.range) {
+              sel.removeAllRanges();
+              sel.addRange(link.range);
+            }
+            var res = this._execCommand("createLink", link.href);
+            this._updateSelectionMetaData();
+            if (this.selectionMetaData.href && this.selectionMetaData.href
+              .element) {
+              this.selectionMetaData.href.element.textContent = link.text;
+            }
+          }.bind(this);
+          this.async(f, 25);
+        }
+      },
+
+      _getFontInfo: function(fontInfo) {
+        fontInfo = fontInfo || this.selectionMetaData.font;
+        var size = parseInt(fontInfo.size);
+        if (isNaN(size)) {
+          size = 3;
+        }
+        var font = {
+          size: size,
+          min: size <= 1,
+          max: size >= 7
+        }
+        return font;
+      },
+
+      increaseFontSize: function() {
+        var font = this._getFontInfo();
+        if (!font.max) {
+          font.size = font.size + 1;
+          var res = this._execCommand("fontSize", font.size);
+          if (res) {
+            this._updateSelectionMetaData();
+          }
+        }
+      },
+
+      decreaseFontSize: function() {
+        var font = this._getFontInfo();
+        if (!font.min) {
+          font.size = font.size - 1;
+          var res = this._execCommand("fontSize", font.size);
+          if (res) {
+            this._updateSelectionMetaData();
+          }
+        }
+      },
+
+      /**
+       * Executes a command
+       */
+      _execCommand: function(cmd, value) {
+        value = value || "";
+        return document.execCommand(cmd, false, value);
+      },
+
+      /**
+       * After enter, space, or tab try to auto-generate anchor tags
+       */
+      _sanitizationHandler: function(e) {
+        this._debounceSanitization();
+      },
+
+      /**
+       * After blur to auto-generate anchor tags
+       */
+      _blurHandler: function(e) {
+        this._debounceSanitization();
+      },
+
+      /**
+       * Debounces requests for sanitization
+       */
+      _debounceSanitization: function() {
+        this.debounce('sanitization', this._performSanitization, this._debounceSanitizationDuration);
+      },
+
+      /**
+       * Update meta-data about current selection
+       */
+      _selectionHandler: function(e) {
+        this._debounceSelectionMetaUpdate();
+      },
+
+      /**
+       * Replaces text nodes with anchor nodes when appropriate
+       */
+      _performSanitization: function(parent) {
+        var sel = this._getSelection();
+        parent = parent || this.target;
+        var target;
+        var walk = document.createTreeWalker(parent, NodeFilter.SHOW_TEXT,
+          null, false);
+        var changes = 0;
+        var lastAppended;
+        var targetElement;
+        while (target = walk.nextNode()) {
+          targetElement;
+          if (target.nodeType === Node.TEXT_NODE) {
+            targetElement = target.parentNode;
+          } else {
+            targetElement = target;
+          }
+          if (targetElement.hasAttribute && targetElement.hasAttribute(
+              "data-dirty")) {
+            var nodes = this._replaceTextWithAnchor(target);
+            if (nodes && nodes.length && nodes[0] != target) {
+              var docfrag = document.createDocumentFragment();
+              nodes.forEach(function(n) {
+                docfrag.appendChild(n);
+              }.bind(this));
+              target.parentNode.replaceChild(docfrag, target);
+              changes++;
+              lastAppended = nodes[nodes.length - 1];
+            }
+          } else {
+            //console.log("not dirty, skipping", targetElement);
+          }
+        }
+
+        if (changes > 0) {
+          //reset cursor position
+          var focus = sel.focusNode;
+          if (sel.focusNode === this.target) {
+            focus = lastAppended;
+          }
+          var r = document.createRange();
+          r.setStartAfter(focus);
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+        var dirty = parent.querySelectorAll("[data-dirty]");
+        for (var i = 0; i < dirty.length; i++) {
+          dirty[i].removeAttribute("data-dirty");
+        }
+        parent.removeAttribute("data-dirty");
+      },
+
+      /**
+       * Convert a given textNode to a list of anchors / textnodes
+       * If no anchors are detected, list returned contains just the input node
+       */
+      _replaceTextWithAnchor: function(target) {
+        var nodes = [];
+        var currentText = "";
+        var isTextNode = target && target.nodeType === Node.TEXT_NODE;
+        var isAnchorText = target && target.parentElement && target.parentElement
+          .href;
+        if (isTextNode && !isAnchorText) {
+          var tokens = target.textContent.split(/(\S+)/);
+          var urlRe =
+            /^(?:\w+:)?\/\/([^\s\.]+\.\S{2}|localhost[\:?\d]*)\S*$/;
+          for (var i = 0; i < tokens.length; i++) {
+            var t = tokens[i];
+            if (t.length > 6 && urlRe.test(tokens[i])) {
+              if (currentText !== "") {
+                nodes.push(document.createTextNode(currentText.replace(
+                  /\s/g, '\u00A0')));
+              }
+              currentText = "";
+              var a = document.createElement("a");
+              a.setAttribute("href", t);
+              a.textContent = t;
+              nodes.push(a);
+            } else {
+              currentText += t;
+            }
+          }
+        }
+        if (nodes.length > 0 && currentText !== "") {
+          nodes.push(document.createTextNode(currentText.replace(/\s/g,
+            '\u00A0')));
+        } else if (nodes.length === 0 && target) {
+          nodes.push(target); //return the original input
+        }
+        return nodes;
+      },
+
+      /**
+       * Triggers an update of selection meta-data after a mouse-up or touch
+       */
+      _onUp: function(e) {
+        this._debounceSelectionMetaUpdate();
+      },
+
+      /**
+       * Handles events from mutation observer
+       */
+      _mutationHandler: function(mutation) {
+        var hasContent = this.target.children.length > 0 || this.target.hasChildNodes();
+        this._setHasContent(hasContent);
+
+        if (this.isDebouncerActive('sanitization')) {
+          this._debounceSanitization();
+        }
+
+        var addStyleScope = function(node) {
+          if (node.classList && node.classList.add) {
+            node.classList.add("style-scope", "simply-editable-content");
+          }
+        }.bind(this);
+
+        if (mutation.addedNodes && mutation.addedNodes.length) {
+          // too heavy for a mutation observer??
+          mutation.addedNodes.forEach(addStyleScope);
+        }
+
+        // try to flag mutated nodes as unsanitized so that sanitization routine does less work
+        var mutationElement;
+        var targetElement;
+        if (mutation.target.nodeType === Node.TEXT_NODE) {
+          targetElement = mutation.target.parentNode;
+        } else {
+          targetElement = mutation.target;
+        }
+        if (targetElement && targetElement.setAttribute) {
+          targetElement.setAttribute("data-dirty", "true");
+          addStyleScope(targetElement);
+        }
+
+        this._debounceSelectionMetaUpdate();
+      },
+
+      /**
+       * Debounces requests to update selection meta-data
+       */
+      _debounceSelectionMetaUpdate: function() {
+        this.debounce('upsel', this._updateSelectionMetaData, this._debounceMetaComputationDuration);
+      },
+
+      /**
+       * Get a selection object
+       */
+      _getSelection: function() {
+        var sf = window.getSelection || document.getSelection;
+        if (sf) {
+          return sf();
+        } else {
+          return null;
+        }
+      },
+
+      /**
+       * Updates selection meta-data object
+       * The goal is to land here anytime the carrat moves
+       *  - mutation observer
+       *  - arrow keys
+       *  - touch/mouse events
+       */
+      _updateSelectionMetaData: function() {
+        var selection = this._getSelection();
+        var selectionMeta = {
+          hasContent: true,
+          href: null,
+          multiElements: anchor !== focus,
+          bold: false,
+          italic: false,
+          underline: false,
+          potentialFormatting: anchor !== focus,
+          orderedList: false,
+          unorderedList: false,
+          font: null
+        };
+        if (!selection) {
+          this._setSelectionMetaData(selectionMeta);
+          return;
+        }
+        var anchor = selection.anchorNode;
+        var focus = selection.focusNode;
+
+        //determine properties of current selection
+        var states = ["bold", "italic", "underline"];
+
+        states.forEach(function(state) {
+          if (!selectionMeta[state]) {
+            var r = document.queryCommandState(state);
+            selectionMeta[state] = r;
+          }
+        }.bind(this));
+
+        //check semantics of the selection. eg: anchor? list item? etc
+        var p = focus || anchor;
+        if (!p && selection.rangeCount > 0) {
+          p = selection.getRangeAt(0).commonAncestorContainer;
+        }
+        var pTag;
+        var font = {
+          size: NaN
+        };
+        while (p && p !== this.target) {
+          pTag = p.tagName;
+          if (!selectionMeta.href && p.href) {
+            selectionMeta.href = {
+              href: p.href,
+              text: p.textContent,
+              element: p
+            };
+            selectionMeta.underline = false; //don't flag as underline
+          }
+          if (!selectionMeta.orderedList && pTag === 'OL') {
+            selectionMeta.orderedList = true;
+          }
+          if (!selectionMeta.unorderedList && pTag === 'UL') {
+            selectionMeta.unorderedList = true;
+          }
+          if (isNaN(font.size) && pTag === 'FONT') {
+            font.size = parseInt(p.getAttribute("size"));
+          }
+          p = p.parentNode;
+        }
+
+        if (isNaN(font.size)) {
+          font.size = 3;
+        }
+        font = this._getFontInfo(font);
+        selectionMeta.font = font;
+
+        selectionMeta.potentialFormatting = selectionMeta.bold ||
+          selectionMeta.underline || selectionMeta.italic;
+
+        this._setSelectionMetaData(selectionMeta);
+      },
+
+      getContent: function() {
+        return this.target.innerHTML;
+      },
+
+      clearContent: function() {
+        this.target.textContent = "";
+      }
+
+    });
+  </script>
+</dom-module>
