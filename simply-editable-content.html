@@ -42,11 +42,11 @@ For example,
       <h2>Edit Link</h2>
       <div>
         <paper-input label="Text to display" value="{{_tempLink.text}}"></paper-input>
-        <paper-input label="Link to" value="{{_tempLink.href}}"></paper-input>
+        <paper-input label="Link to" value="{{_tempLink.href}}" auto-validate pattern="[[urlPattern]]" error-message="Invalid URL!"></paper-input>
       </div>
       <div class="buttons">
         <paper-button dialog-dismiss>Cancel</paper-button>
-        <paper-button dialog-confirm autofocus on-tap="_onTapLinkOk">OK</paper-button>
+        <paper-button dialog-confirm autofocus on-tap="_onTapLinkOk" disabled="[[!_isValidUrl(_tempLink.href)]]">OK</paper-button>
       </div>
     </simple-dialog>
   </template>
@@ -98,6 +98,15 @@ For example,
           value: false,
           notify: true,
           readOnly: true
+        },
+        /**
+         * Pattern for url validation.
+         * originally based on https://github.com/segmentio/is-url.
+         * modified to allow omission of protocol if 'www.' is present
+         */
+        urlPattern: {
+          type: String,
+          value: "^(?:\\w+:\\/\\/|www\.)+([^\\s\\.]+\\.\\S{2}|localhost[\\:?\\d]*)\\S*$"
         }
       },
 
@@ -196,8 +205,13 @@ For example,
 
       _onTapLinkOk: function() {
         var link = this._tempLink;
+        var protocolIdx = link.href.indexOf("://");
+        if (protocolIdx <= -1) {
+          link.href = "http://" + link.href;
+        }
         if (link.element) {
           link.element.setAttribute("href", link.href);
+          link.element.setAttribute("target", "_blank");
           link.element.textContent = link.text;
         } else {
           var sel = this._getSelection();
@@ -357,8 +371,7 @@ For example,
           .href;
         if (isTextNode && !isAnchorText) {
           var tokens = target.textContent.split(/(\S+)/);
-          var urlRe =
-            /^(?:\w+:)?\/\/([^\s\.]+\.\S{2}|localhost[\:?\d]*)\S*$/;
+          var urlRe = new RegExp(this.urlPattern);
           for (var i = 0; i < tokens.length; i++) {
             var t = tokens[i];
             if (t.length > 6 && urlRe.test(tokens[i])) {
@@ -368,8 +381,14 @@ For example,
               }
               currentText = "";
               var a = document.createElement("a");
-              a.setAttribute("href", t);
+              var tHref = t;
+              var protocolIdx = t.indexOf("://");
+              if (protocolIdx <= -1) {
+                tHref = "http://" + t;
+              }
+              a.setAttribute("href", tHref);
               a.textContent = t;
+              a.target = "_blank";
               nodes.push(a);
             } else {
               currentText += t;
@@ -536,6 +555,11 @@ For example,
 
       clearContent: function() {
         this.target.textContent = "";
+      },
+
+      _isValidUrl: function(url) {
+        var urlRe = new RegExp(this.urlPattern);
+        return urlRe.test(url);
       }
 
     });
