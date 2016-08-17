@@ -226,6 +226,7 @@ For example,
             if (this.selectionMetaData.href && this.selectionMetaData.href
               .element) {
               this.selectionMetaData.href.element.textContent = link.text;
+              this.selectionMetaData.href.element.target = "_blank";
             }
           }.bind(this);
           this.async(f, 25);
