@@ -41,8 +41,8 @@ For example,
     <simple-dialog id="linkDialog" modal role="alertdialog">
       <h2>Edit Link</h2>
       <div>
-        <paper-input label="Text to display" value="{{_tempLink.text}}"></paper-input>
-        <paper-input label="Link to" value="{{_tempLink.href}}" auto-validate pattern="[[urlPattern]]" error-message="Invalid URL!"></paper-input>
+        <paper-input label="[[settings.link.textLabel]]" placeholder="[[settings.link.textPlaceholder]]" value="{{_tempLink.text}}"></paper-input>
+        <paper-input label="[[settings.link.label]]" placeholder="[[settings.link.placeholder]]" value="{{_tempLink.href}}" auto-validate pattern="[[settings.link.pattern]]" error-message="Invalid URL!"></paper-input>
       </div>
       <div class="buttons">
         <paper-button dialog-dismiss>Cancel</paper-button>
@@ -100,13 +100,24 @@ For example,
           readOnly: true
         },
         /**
+         * Settings object
          * Pattern for url validation.
          * originally based on https://github.com/segmentio/is-url.
          * modified to allow omission of protocol if 'www.' is present
          */
-        urlPattern: {
-          type: String,
-          value: "^(?:\\w+:\\/\\/|www\.)+([^\\s\\.]+\\.\\S{2}|localhost[\\:?\\d]*)\\S*$"
+        settings: {
+          type: Object,
+          value: function() {
+            return {
+              link: {
+                pattern: "^(?:\\w+:\\/\\/|www\.)+([^\\s\\.]+\\.\\S{2}|localhost[\\:?\\d]*)\\S*$",
+                placeholder: "www.example.com",
+                label: "Address",
+                textPlaceholder: "link text",
+                textLabel: "Link text"
+              }
+            };
+          }
         }
       },
 
@@ -372,7 +383,7 @@ For example,
           .href;
         if (isTextNode && !isAnchorText) {
           var tokens = target.textContent.split(/(\S+)/);
-          var urlRe = new RegExp(this.urlPattern);
+          var urlRe = new RegExp(this.settings.link.pattern);
           for (var i = 0; i < tokens.length; i++) {
             var t = tokens[i];
             if (t.length > 6 && urlRe.test(tokens[i])) {
@@ -559,7 +570,7 @@ For example,
       },
 
       _isValidUrl: function(url) {
-        var urlRe = new RegExp(this.urlPattern);
+        var urlRe = new RegExp(this.settings.link.pattern);
         return urlRe.test(url);
       }
 
