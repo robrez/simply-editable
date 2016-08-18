@@ -24,25 +24,28 @@ For example,
       #content {
         padding: 16px;
       }
-
       [contenteditable=true]:empty:before {
         color: var(--secondary-text-color, #737373);
         content: attr(placeholder);
         display: block;
       }
+
     </style>
     <div id="content" contenteditable="true" placeholder$="[[placeholder]]"></div>
     <iron-a11y-keys target="[[target]]" keys="enter:keyup space:keyup tab ctrl+v:keyup"
-                on-keys-pressed="_sanitizationHandler">
+            on-keys-pressed="_sanitizationHandler">
     </iron-a11y-keys>
     <iron-a11y-keys target="[[target]]" keys="up:keyup down:keyup left:keyup right:keyup pageup:keyup pagedown:keyup home end arrow:keyup ctrl+v ctrl+x"
-                on-keys-pressed="_selectionHandler">
+            on-keys-pressed="_selectionHandler">
     </iron-a11y-keys>
     <simple-dialog id="linkDialog" modal role="alertdialog">
       <h2>Edit Link</h2>
       <div>
-        <paper-input label="[[settings.link.textLabel]]" placeholder="[[settings.link.textPlaceholder]]" value="{{_tempLink.text}}"></paper-input>
-        <paper-input label="[[settings.link.label]]" placeholder="[[settings.link.placeholder]]" value="{{_tempLink.href}}" auto-validate pattern="[[settings.link.pattern]]" error-message="Invalid URL!"></paper-input>
+        <paper-input label="[[settings.link.textLabel]]" placeholder="[[settings.link.textPlaceholder]]"
+                value="{{_tempLink.text}}"></paper-input>
+        <paper-input label="[[settings.link.label]]" placeholder="[[settings.link.placeholder]]"
+                value="{{_tempLink.href}}" auto-validate pattern="[[settings.link.pattern]]"
+                error-message="Invalid URL!"></paper-input>
       </div>
       <div class="buttons">
         <paper-button dialog-dismiss>Cancel</paper-button>
@@ -134,7 +137,9 @@ For example,
       ready: function() {
         var handler = this._mutationHandler.bind(this);
         var observer = new MutationObserver(function(mutations) {
-          mutations.forEach(handler);
+          for (var i = 0; i < mutations.length; i++) {
+            handler(mutations[i]);
+          }
         }.bind(this));
         var config = {
           attributes: false,
@@ -340,9 +345,9 @@ For example,
             var nodes = this._replaceTextWithAnchor(target);
             if (nodes && nodes.length && nodes[0] != target) {
               var docfrag = document.createDocumentFragment();
-              nodes.forEach(function(n) {
-                docfrag.appendChild(n);
-              }.bind(this));
+              for (var i = 0; i < nodes.length; i++) {
+                docfrag.appendChild(nodes[i]);
+              }
               target.parentNode.replaceChild(docfrag, target);
               changes++;
               lastAppended = nodes[nodes.length - 1];
@@ -442,7 +447,9 @@ For example,
 
         if (mutation.addedNodes && mutation.addedNodes.length) {
           // too heavy for a mutation observer??
-          mutation.addedNodes.forEach(addStyleScope);
+          for (var i = 0; i < mutation.addedNodes.length; i++) {
+            addStyleScope(mutation.addNodes[i]);
+          }
         }
 
         // try to flag mutated nodes as unsanitized so that sanitization routine does less work
@@ -575,5 +582,6 @@ For example,
       }
 
     });
+
   </script>
 </dom-module>
