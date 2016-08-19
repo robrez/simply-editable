@@ -29,7 +29,6 @@ For example,
         content: attr(placeholder);
         display: block;
       }
-
     </style>
     <div id="content" contenteditable="true" placeholder$="[[placeholder]]"></div>
     <iron-a11y-keys target="[[target]]" keys="enter:keyup space:keyup tab ctrl+v:keyup"
@@ -192,23 +191,14 @@ For example,
 
       modifyAnchor: function() {
         var link = this.selectionMetaData.href;
-        var temp;
         var sel = this._getSelection();
+        var temp = {};
         if (link) {
-          temp = {
-            href: link.href,
-            text: link.text,
-            element: link.element
-          };
-        } else {
-          temp = {
-            href: null,
-            text: null,
-            element: null
-          };
-          if (sel) {
-            temp.text = sel.toString();
-          }
+          temp.href = link.href;
+          temp.text = link.text;
+          temp.element = link.element;
+        } else if (sel) {
+          temp.text = sel.toString();
         }
         var range;
         if (sel && sel.rangeCount) {
@@ -221,31 +211,77 @@ For example,
 
       _onTapLinkOk: function() {
         var link = this._tempLink;
-        var protocolIdx = link.href.indexOf("://");
-        if (protocolIdx <= -1) {
-          link.href = "http://" + link.href;
-        }
         if (link.element) {
-          link.element.setAttribute("href", link.href);
-          link.element.setAttribute("target", "_blank");
-          link.element.textContent = link.text;
+          //an existing link was modified
+          this._updateAnchor(link.element, link);
         } else {
           var sel = this._getSelection();
           var f = function() {
             this.target.focus();
-            if (sel && link.range) {
+            if (sel && link.range && !link.range.collapsed) {
+              //Use execCommand to turn selection into a link
               sel.removeAllRanges();
               sel.addRange(link.range);
-            }
-            var res = this._execCommand("createLink", link.href);
-            this._updateSelectionMetaData();
-            if (this.selectionMetaData.href && this.selectionMetaData.href
-              .element) {
-              this.selectionMetaData.href.element.textContent = link.text;
-              this.selectionMetaData.href.element.target = "_blank";
+              this._ensureAnchorDefaults(link);
+              var res = this._execCommand("createLink", link.href);
+              this._updateSelectionMetaData();
+              link = this.selectionMetaData.href;
+              if (href) {
+                this._updateAnchor(href.element, link);
+              }
+            } else {
+              //createLink does not work in IE if there is no selectionRange
+              var anchor = document.createElement("a");
+              this._updateAnchor(anchor, link);
+              var focus = sel.focusNode;
+              if (sel.focusNode === this.target) {
+                this.target.appendChild(anchor);
+              } else if (sel.focusNode.nextSibling) {
+                sel.focusNode.parentNode.insertBefore(anchor, sel.focusNode
+                  .nextSibling)
+              } else {
+                sel.focusNode.parentNode.appendChild(anchor);
+              }
+              r.setStartAfter(anchor);
+              r.collapse(false);
+              sel.removeAllRanges();
+              sel.addRange(r);
+              this._updateSelectionMetaData();
             }
           }.bind(this);
           this.async(f, 25);
+        }
+      },
+
+      _ensureAnchorDefaults: function(props) {
+        if (props) {
+          if (props.href && props.href.indexOf("://") === -1) {
+            props.href = "http://" + props.href;
+          }
+          if (!props.target) {
+            props.target = "_blank";
+          }
+        }
+      },
+
+      /**
+       * Set properties on an anchor element
+       */
+      _updateAnchor: function(anchor, props) {
+        if (anchor && props) {
+          this._ensureAnchorDefaults(props);
+          var href = props.href;
+          var text = props.text;
+          var target = props.target;
+          if (href && href !== anchor.href) {
+            anchor.setAttribute("href", href);
+          }
+          if (text && text !== anchor.textContent) {
+            anchor.textContent = text;
+          }
+          if (target !== anchor.target) {
+            anchor.setAttribute("target", target);
+          }
         }
       },
 
@@ -352,8 +388,6 @@ For example,
               changes++;
               lastAppended = nodes[nodes.length - 1];
             }
-          } else {
-            //console.log("not dirty, skipping", targetElement);
           }
         }
 
@@ -379,6 +413,7 @@ For example,
       /**
        * Convert a given textNode to a list of anchors / textnodes
        * If no anchors are detected, list returned contains just the input node
+       * IE does this automatically
        */
       _replaceTextWithAnchor: function(target) {
         var nodes = [];
@@ -398,14 +433,7 @@ For example,
               }
               currentText = "";
               var a = document.createElement("a");
-              var tHref = t;
-              var protocolIdx = t.indexOf("://");
-              if (protocolIdx <= -1) {
-                tHref = "http://" + t;
-              }
-              a.setAttribute("href", tHref);
-              a.textContent = t;
-              a.target = "_blank";
+              this._updateAnchor(a, { href: t, text: t });
               nodes.push(a);
             } else {
               currentText += t;
@@ -582,6 +610,5 @@ For example,
       }
 
     });
-
   </script>
 </dom-module>
