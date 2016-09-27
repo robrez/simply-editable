@@ -41,10 +41,9 @@ For example,
       <h2>Edit Link</h2>
       <div>
         <paper-input label="[[settings.link.textLabel]]" placeholder="[[settings.link.textPlaceholder]]"
-                value="{{_tempLink.text}}"></paper-input>
+                value="{{_tempLink.text::input}}"></paper-input>
         <paper-input label="[[settings.link.label]]" placeholder="[[settings.link.placeholder]]"
-                value="{{_tempLink.href}}" auto-validate pattern="[[settings.link.pattern]]"
-                error-message="Invalid URL!"></paper-input>
+                value="{{_tempLink.href::input}}" invalid$="[[!_isValidUrl(_tempLink.href)]]" error-message="Invalid URL!"></paper-input>
       </div>
       <div class="buttons">
         <paper-button dialog-dismiss>Cancel</paper-button>
